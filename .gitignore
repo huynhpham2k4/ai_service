@@ -1,52 +1,30 @@
-# Environment variables
+# ── Environment ───────────────────────────────────────────────────
 .env
 .env.*
 !.env.example
 
-# Virtual environments
-/venv-ai
+# ── Virtual environments ──────────────────────────────────────────
+/venv-ai/
 .venv/
 venv/
 env/
 
-# Temporary files
-/temp
-tmp/
-
-# Python cache and bytecode
+# ── Python cache ──────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-*.pyw
-*.pyz
-*.pywz
-**/__init__.py
 
-# Logs
+# ── Logs ──────────────────────────────────────────────────────────
 *.log
-app.log
 
-# Test and tooling caches
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+# ── Model cache (tải về khi chạy lần đầu) ────────────────────────
+model_cache/
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
+# ── File âm thanh test sinh ra ────────────────────────────────────
+test/audio_samples/
 
-# IDE/editor
+# ── IDE / OS ──────────────────────────────────────────────────────
 .vscode/
 .idea/
-
-# OS artifacts
 .DS_Store
 Thumbs.db
-
-# Runtime/model artifacts
-model_cache/
-app/test/audio_samples/
