@@ -32,5 +32,5 @@ def create_audio_from_word(
 
 
 if __name__ == "__main__":
-    audio_path = create_audio_from_word("where are you from hihi", lang="en")
+    audio_path = create_audio_from_word("nice", lang="en")
     print(f"Da tao file: {audio_path}")

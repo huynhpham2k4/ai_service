@@ -1,13 +1,13 @@
+import asyncio
 import logging
 import sys
-from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.service import ErrorResponse, RecognizeResponse, pronunciation_service
+from app.service import predict_phonemes, expected_phonemes, compute_score
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -18,75 +18,50 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-ALLOWED_AUDIO_TYPES = {
-    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3",
-    "audio/ogg", "audio/flac", "audio/webm", "audio/mp4",
-    "application/octet-stream",
-}
-MAX_FILE_SIZE_BYTES = int(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+MAX_FILE_SIZE = int(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Khởi động %s v%s ...", settings.APP_NAME, settings.APP_VERSION)
-    yield
-    logger.info("Tắt ứng dụng.")
-
-
-app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    description="API đánh giá phát âm tiếng Anh sử dụng mô hình Wav2Vec2.",
-    lifespan=lifespan,
-)
-
+app = FastAPI(title="Pronunciation Assessment API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/health", tags=["System"], summary="Kiểm tra trạng thái API")
-async def health_check():
-    return {"status": "ok", "version": settings.APP_VERSION}
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
-@app.post(
-    "/recognize",
-    response_model=RecognizeResponse,
-    tags=["Pronunciation Assessment"],
-    summary="Đánh giá phát âm",
-    responses={
-        400: {"model": ErrorResponse, "description": "File âm thanh không hợp lệ"},
-        413: {"model": ErrorResponse, "description": "File vượt quá kích thước cho phép"},
-        500: {"model": ErrorResponse, "description": "Lỗi xử lý nội bộ"},
-    },
-)
+@app.post("/recognize")
 async def recognize(
-    audio: Annotated[UploadFile, File(description="File âm thanh (WAV, MP3, OGG, FLAC, ...)")],
+    audio: Annotated[UploadFile, File(description="File âm thanh")],
     text: Annotated[str, Form(min_length=1, max_length=500, description="Từ hoặc câu cần phát âm")],
-    include_phoneme_details: Annotated[bool, Form(description="Trả về chi tiết âm vị")] = True,
-) -> RecognizeResponse:
+):
     audio_bytes = await audio.read()
 
-    if len(audio_bytes) == 0:
+    if not audio_bytes:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="File âm thanh rỗng.")
-    if len(audio_bytes) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File vượt quá {settings.MAX_FILE_SIZE_MB} MB.")
+    if len(audio_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File quá lớn.")
 
-    content_type = audio.content_type or ""
-    if content_type and content_type not in ALLOWED_AUDIO_TYPES:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Định dạng không được hỗ trợ: {content_type}.")
-
-    reference_text = text.strip()
-    if not reference_text:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Tham số 'text' không được để trống.")
+    text = text.strip()
+    if not text:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Text không được để trống.")
 
     try:
-        return pronunciation_service.assess(audio_bytes, reference_text, include_phoneme_details)
+        loop = asyncio.get_event_loop()
+        predicted = await loop.run_in_executor(None, predict_phonemes, audio_bytes)
+        expected = await loop.run_in_executor(None, expected_phonemes, text)
+        score = compute_score(expected, predicted)
+
+        return {
+            "reference_text": text,
+            "expected_phonemes": " ".join(expected),
+            "predicted_phonemes": " ".join(predicted),
+            "score": score,
+        }
     except Exception as exc:
-        logger.exception("Lỗi đánh giá phát âm: %s", exc)
+        logger.exception("Lỗi xử lý: %s", exc)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Không thể xử lý file âm thanh.") from exc
