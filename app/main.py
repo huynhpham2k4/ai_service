@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.service import predict_phonemes, expected_phonemes, compute_score
+from app.service import predict_phonemes, expected_phonemes, compute_score, phonemes_to_ipa
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -58,8 +58,8 @@ async def recognize(
 
         return {
             "reference_text": text,
-            "expected_phonemes": " ".join(expected),
-            "predicted_phonemes": " ".join(predicted),
+            "expected_phonemes": phonemes_to_ipa(expected),
+            "predicted_phonemes": phonemes_to_ipa(predicted),
             "score": score,
         }
     except Exception as exc:
