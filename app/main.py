@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.service import predict_phonemes, expected_phonemes, compute_score, phonemes_to_ipa
+from app.service import predict_phonemes, expected_phonemes, compute_score, phonemes_to_ipa, _load_model
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -20,7 +20,16 @@ settings = get_settings()
 
 MAX_FILE_SIZE = int(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
 
-app = FastAPI(title="Pronunciation Assessment API")
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _load_model()
+    yield
+
+
+app = FastAPI(title="Pronunciation Assessment API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,6 +64,11 @@ async def recognize(
         predicted = await loop.run_in_executor(None, predict_phonemes, audio_bytes)
         expected = await loop.run_in_executor(None, expected_phonemes, text)
         score = compute_score(expected, predicted)
+
+        logger.info("Reference text: %s", text)
+        logger.info("Expected phonemes: %s", phonemes_to_ipa(expected))
+        logger.info("Predicted phonemes: %s", phonemes_to_ipa(predicted))
+        logger.info("Score: %.2f", score)
 
         return {
             "reference_text": text,
