@@ -85,17 +85,21 @@ def phonemes_to_ipa(phonemes: list[str]) -> str:
     return " ".join(_ARPABET_TO_IPA.get(p, p) for p in phonemes)
 
 
-_SKIP_TOKENS = frozenset({'|', '<pad>', '<s>', '</s>', '<unk>'})
+_SKIP_TOKENS = frozenset({
+    '|', '<pad>', '<s>', '</s>', '<unk>',
+    '[pad]', '[unk]', '[sep]', '[cls]', '[mask]',
+})
 
 
 def _ctc_decode_tokens(ids: list[int], blank_token: str) -> list[str]:
     """CTC greedy decode: remove blanks, word-boundary markers, and consecutive duplicates."""
     tokens = processor.tokenizer.convert_ids_to_tokens(ids)
+    blank_token_low = blank_token.lower()
     decoded: list[str] = []
     prev: str | None = None
     for tok in tokens:
         tok_low = tok.lower()
-        if tok == blank_token or tok_low in _SKIP_TOKENS:
+        if tok_low == blank_token_low or tok_low in _SKIP_TOKENS:
             prev = None
             continue
         if tok_low != prev:

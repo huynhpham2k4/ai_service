@@ -28,3 +28,6 @@ test/audio_samples/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ── data ──────────────────────────────────────────────────────
+data_craw

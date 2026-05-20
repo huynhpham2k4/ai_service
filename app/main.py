@@ -66,8 +66,10 @@ async def recognize(
         score = compute_score(expected, predicted)
 
         logger.info("Reference text: %s", text)
-        logger.info("Expected phonemes: %s", phonemes_to_ipa(expected))
-        logger.info("Predicted phonemes: %s", phonemes_to_ipa(predicted))
+        logger.info("Expected phonemes: %s", expected)
+        logger.info("Predicted phonemes: %s", predicted)
+        logger.info("Expected phonemes api: %s", phonemes_to_ipa(expected))
+        logger.info("Predicted phonemes api: %s", phonemes_to_ipa(predicted))
         logger.info("Score: %.2f", score)
 
         return {
@@ -75,7 +77,7 @@ async def recognize(
             "expected_phonemes": phonemes_to_ipa(expected),
             "predicted_phonemes": phonemes_to_ipa(predicted),
             "score": score,
-        }
+        }   
     except Exception as exc:
         logger.exception("Lỗi xử lý: %s", exc)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Không thể xử lý file âm thanh.") from exc
