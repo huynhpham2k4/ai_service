@@ -26,6 +26,12 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_model()
+    if settings.DEBUG_SAVE_AUDIO:
+        logger.info(
+            "DEBUG_SAVE_AUDIO=bật — WAV lưu tại %s (DEBUG_PLAY_AUDIO=%s)",
+            settings.DEBUG_AUDIO_DIR,
+            settings.DEBUG_PLAY_AUDIO,
+        )
     yield
 
 

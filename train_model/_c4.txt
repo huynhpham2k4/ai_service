@@ -1,0 +1,121 @@
+import librosa
+
+audio_raw: np.ndarray | None = None
+
+# Trạng thái ghi âm start/stop
+_rec = {"active": False, "chunks": [], "stream": None}
+
+
+def _audio_callback(indata, frames, time_info, status):
+    if status:
+        print(status)
+    if _rec["active"]:
+        _rec["chunks"].append(indata.copy())
+
+
+def _start_recording():
+    _rec["chunks"] = []
+    _rec["active"] = True
+    _rec["stream"] = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="float32",
+        callback=_audio_callback,
+    )
+    _rec["stream"].start()
+
+
+def _stop_recording() -> np.ndarray | None:
+    _rec["active"] = False
+    if _rec["stream"] is not None:
+        _rec["stream"].stop()
+        _rec["stream"].close()
+        _rec["stream"] = None
+    if not _rec["chunks"]:
+        return None
+    audio = np.concatenate(_rec["chunks"], axis=0).flatten()
+    peak = np.max(np.abs(audio))
+    if peak > 0:
+        audio = audio / peak
+    return audio
+
+
+def load_audio_file(path: str, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    y, _ = librosa.load(path, sr=sample_rate, mono=True)
+    return y.astype(np.float32)
+
+
+btn_record = widgets.Button(
+    description="Bắt đầu ghi âm", button_style="danger", icon="microphone"
+)
+btn_play_raw = widgets.Button(
+    description="Nghe lại", button_style="info", icon="play"
+)
+file_uploader = widgets.FileUpload(
+    accept=".wav,.mp3,.ogg,.flac", multiple=False, description="Hoặc tải file"
+)
+output_record = widgets.Output()
+
+
+def _on_toggle_record(_):
+    global audio_raw
+    with output_record:
+        if not _rec["active"]:
+            clear_output(wait=True)
+            _start_recording()
+            btn_record.description = "Dừng ghi âm"
+            btn_record.button_style = "warning"
+            btn_record.icon = "stop"
+            print("Đang ghi âm... Nhấn «Dừng ghi âm» khi xong.")
+        else:
+            audio_raw = _stop_recording()
+            btn_record.description = "Bắt đầu ghi âm"
+            btn_record.button_style = "danger"
+            btn_record.icon = "microphone"
+            if audio_raw is None or len(audio_raw) == 0:
+                print("Không thu được âm thanh — thử ghi lại.")
+            else:
+                dur = len(audio_raw) / SAMPLE_RATE
+                print(f"Đã dừng. Số mẫu: {len(audio_raw):,} (~{dur:.2f}s)")
+                print("Nhấn «Nghe lại» để nghe bản ghi.")
+
+
+def _on_play_raw(_):
+    with output_record:
+        if audio_raw is None:
+            print("Chưa có audio — hãy ghi âm hoặc tải file trước.")
+            return
+        if _rec["active"]:
+            print("Đang ghi âm — hãy dừng trước khi nghe lại.")
+            return
+        clear_output(wait=True)
+        display(Audio(audio_raw, rate=SAMPLE_RATE))
+
+
+def _on_upload(change):
+    global audio_raw
+    if not change["new"]:
+        return
+    with output_record:
+        clear_output(wait=True)
+        uploaded = change["new"][0]
+        tmp_path = Path("_uploaded_audio") / uploaded["name"]
+        tmp_path.parent.mkdir(exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            f.write(uploaded["content"])
+        audio_raw = load_audio_file(str(tmp_path))
+        max_len = int(settings.MAX_AUDIO_DURATION_SEC * SAMPLE_RATE)
+        audio_raw = audio_raw[:max_len]
+        print(f"Đã tải: {uploaded['name']} | {len(audio_raw):,} mẫu")
+        print("Nhấn «Nghe lại» để nghe.")
+
+
+btn_record.on_click(_on_toggle_record)
+btn_play_raw.on_click(_on_play_raw)
+file_uploader.observe(_on_upload, names="value")
+
+display(widgets.VBox([
+    widgets.HBox([btn_record, btn_play_raw]),
+    file_uploader,
+    output_record,
+]))
