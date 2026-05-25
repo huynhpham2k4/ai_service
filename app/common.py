@@ -18,20 +18,14 @@ STRESS_RE = re.compile(r"[012]$")
 # TimitBet 61 → 39 phoneme mapping
 # Lee, K.-F., & Hon, H.-W. (1989). IEEE TASSP, 37(11), 1641–1648.
 PHON61_TO_39: dict[str, str] = {
-    'iy': 'iy',  'ih': 'ih',  'eh': 'eh',   'ae': 'ae',  'ix': 'ih',  'ax': 'ah',
-    'ah': 'ah',  'uw': 'uw',  'ux': 'uw',   'uh': 'uh',  'ao': 'aa',  'aa': 'aa',
-    'ey': 'ey',  'ay': 'ay',  'oy': 'oy',   'aw': 'aw',  'ow': 'ow',
-    'l':  'l',   'el': 'l',   'r':  'r',    'y':  'y',   'w':  'w',
-    'er': 'er',  'axr':'er',  'm':  'm',    'em': 'm',   'n':  'n',
-    'nx': 'n',   'en': 'n',   'ng': 'ng',   'eng':'ng',  'ch': 'ch',
-    'jh': 'jh',  'dh': 'dh',  'b':  'b',    'd':  'd',   'dx': 'd',
-    'g':  'g',   'p':  'p',   't':  't',    'k':  'k',   'z':  'z',
-    'zh': 'sh',  'v':  'v',   'f':  'f',    'th': 'th',  's':  's',
-    'sh': 'sh',  'hh': 'hh',  'hv': 'hh',
-    # silence / boundary tokens → filtered out
-    'pcl':'h#',  'tcl':'h#',  'kcl':'h#',   'qcl':'h#',  'bcl':'h#',
-    'dcl':'h#',  'gcl':'h#',  'h#': 'h#',   '#h': 'h#',  'pau':'h#',
-    'epi':'h#',  'ax-h':'ah', 'q':  'h#',
+    'iy': 'iy',  'ih': 'ih',   'eh': 'eh',  'ae': 'ae',    'ix': 'ih',  'ax': 'ah',   'ah': 'ah',  'uw': 'uw',
+    'ux': 'uw',  'uh': 'uh',   'ao': 'aa',  'aa': 'aa',    'ey': 'ey',  'ay': 'ay',   'oy': 'oy',  'aw': 'aw',
+    'ow': 'ow',  'l': 'l',     'el': 'l',   'r': 'r',      'y': 'y',    'w': 'w',     'er': 'er',  'axr': 'er',
+    'm': 'm',    'em': 'm',    'n': 'n',    'nx': 'n',     'en': 'n',   'ng': 'ng',   'eng': 'ng', 'ch': 'ch',
+    'jh': 'jh',  'dh': 'dh',   'b': 'b',    'd': 'd',      'dx': 'd',  'g': 'g',     'p': 'p',    't': 't',
+    'k': 'k',    'z': 'z',     'zh': 'sh',  'v': 'v',      'f': 'f',    'th': 'th',   's': 's',    'sh': 'sh',
+    'hh': 'hh',  'hv': 'hh',   'pcl': 'h#', 'tcl': 'h#', 'kcl': 'h#', 'qcl': 'h#', 'bcl': 'h#', 'dcl': 'h#',
+    'gcl': 'h#', 'h#': 'h#',   '#h': 'h#',  'pau': 'h#', 'epi': 'h#', 'ax-h': 'ah', 'q': 'h#',
 }
 SILENCE = frozenset({'h#'})
 
@@ -50,10 +44,13 @@ ARPABET_TO_IPA: dict[str, str] = {
     't':  't',   'k':  'k',
 }
 
-SKIP_TOKENS = frozenset({
-    '|', '<pad>', '<s>', '</s>', '<unk>',
-    '[pad]', '[unk]', '[sep]', '[cls]', '[mask]',
-})
+# CTC special tokens → loại khỏi argmax trước khi decode (thêm token mới tại đây)
+CTC_SPECIAL_TOKENS: tuple[str, ...] = (
+    "[PAD]",
+    " ",
+    "h#",
+    '|'
+)
 
 
 # ── Phoneme utilities ────────────────────────────────────────────────────────
@@ -61,6 +58,11 @@ SKIP_TOKENS = frozenset({
 def phonemes_to_ipa(phonemes: list[str]) -> str:
     """Convert a list of ARPAbet phonemes to a space-joined IPA string."""
     return " ".join(ARPABET_TO_IPA.get(p, p) for p in phonemes)
+
+
+def phonemes_to_ipa_tokens(phonemes: list[str]) -> list[str]:
+    """Convert a list of ARPAbet phonemes to a list of IPA tokens."""
+    return [ARPABET_TO_IPA.get(p, p) for p in phonemes]
 
 
 def normalize_phonemes(tokens: list[str]) -> list[str]:
@@ -78,21 +80,44 @@ def strip_g2p_tokens(raw: list[str]) -> list[str]:
     return [STRESS_RE.sub("", tok).lower() for tok in raw if re.search(r"[a-zA-Z]", tok)]
 
 
-def ctc_decode_tokens(tokenizer, ids: list[int], blank_token: str) -> list[str]:
-    """CTC greedy decode: remove blanks, word-boundary markers, and consecutive duplicates."""
-    tokens = tokenizer.convert_ids_to_tokens(ids)
-    blank_token_low = blank_token.lower()
-    decoded: list[str] = []
-    prev: str | None = None
-    for tok in tokens:
-        tok_low = tok.lower()
-        if tok_low == blank_token_low or tok_low in SKIP_TOKENS:
-            prev = None
-            continue
-        if tok_low != prev:
-            decoded.append(tok_low)
-            prev = tok_low
-    return decoded
+def get_ctc_special_token_ids(tokenizer) -> frozenset[int]:
+    """Chuyển CTC_SPECIAL_TOKENS → id; dùng để loại khỏi token_ids trước khi decode phonemes."""
+    vocab = tokenizer.get_vocab()
+    ids: set[int] = set()
+    for token in CTC_SPECIAL_TOKENS:
+        if token in vocab:
+            ids.add(tokenizer.encode(token, add_special_tokens=False)[0])
+    return frozenset(ids)
+
+
+def collapse_tokens(tokens: list) -> list:
+    """CTC collapse: bỏ token_id lặp liên tiếp (giữ 1 trong chuỗi trùng)."""
+    prev_token = None
+    out: list = []
+    for token in tokens:
+        if token != prev_token and prev_token is not None:
+            out.append(prev_token)
+        prev_token = token
+    if prev_token is not None:
+        out.append(prev_token)
+    return out
+
+
+def clean_token_ids(token_ids: list[int], special_ids: frozenset[int]) -> list[int]:
+    """Remove special token ids, then collapse duplicated token ids."""
+    filtered = [x for x in token_ids if x not in special_ids]
+    return collapse_tokens(filtered)
+
+
+def ctc_decode_token_ids(tokenizer, token_ids: list[int]) -> list[str]:
+    """clean_token_ids → mỗi id = 1 phoneme trong vocab."""
+    special_ids = get_ctc_special_token_ids(tokenizer)
+    cleaned = clean_token_ids(token_ids, special_ids)
+    phonemes: list[str] = []
+    for tok in tokenizer.convert_ids_to_tokens(cleaned):
+        p = tok.strip().lower()
+        phonemes.append(p)
+    return phonemes
 
 
 def save_debug_audio_preview(

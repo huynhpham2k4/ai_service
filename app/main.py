@@ -7,7 +7,14 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.service import predict_phonemes, expected_phonemes, compute_score, phonemes_to_ipa, _load_model
+from app.service import (
+    predict_phonemes,
+    expected_phonemes,
+    compute_score,
+    phonemes_to_ipa,
+    phonemes_to_ipa_tokens,
+    _load_model,
+)
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -69,7 +76,10 @@ async def recognize(
         loop = asyncio.get_event_loop()
         predicted = await loop.run_in_executor(None, predict_phonemes, audio_bytes)
         expected = await loop.run_in_executor(None, expected_phonemes, text)
-        score = compute_score(expected, predicted)
+        score = compute_score(
+            phonemes_to_ipa_tokens(expected),
+            phonemes_to_ipa_tokens(predicted),
+        )
 
         logger.info("Reference text: %s", text)
         logger.info("Expected phonemes: %s", expected)

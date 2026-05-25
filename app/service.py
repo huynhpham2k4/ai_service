@@ -10,9 +10,10 @@ from g2p_en import G2p
 
 from app.config import get_settings
 from app.common import (
-    ctc_decode_tokens,
+    ctc_decode_token_ids,
     normalize_phonemes,
     phonemes_to_ipa,
+    phonemes_to_ipa_tokens,
     preprocess_audio,
     save_debug_audio_preview,
     strip_g2p_tokens,
@@ -73,10 +74,8 @@ def predict_phonemes(audio_bytes: bytes) -> list[str]:
     with torch.no_grad():
         logits = model(**inputs).logits
 
-    ids = torch.argmax(logits, dim=-1)[0].tolist()
-    blank_token = processor.tokenizer.pad_token
-    tokens = ctc_decode_tokens(processor.tokenizer, ids, blank_token)
-    return normalize_phonemes(tokens)
+    predicted_ids = torch.argmax(logits, dim=-1)[0].tolist()
+    return ctc_decode_token_ids(processor.tokenizer, predicted_ids)
 
 
 def expected_phonemes(text: str) -> list[str]:
@@ -95,4 +94,5 @@ __all__ = [
     "expected_phonemes",
     "compute_score",
     "phonemes_to_ipa",
+    "phonemes_to_ipa_tokens",
 ]
