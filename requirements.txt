@@ -15,7 +15,9 @@ transformers>=4.40.0
 # Audio processing
 librosa>=0.10.1
 soundfile>=0.12.1
-edge-tts>=6.1.0
+
+# HTTP client for dictionary API crawling
+requests>=2.31.0
 
 # Phoneme (text → ARPAbet)
 g2p_en>=2.1.0
