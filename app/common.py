@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import Levenshtein
 import numpy as np
 import librosa
 import soundfile as sf
@@ -187,16 +188,13 @@ def preprocess_audio(audio: np.ndarray) -> np.ndarray:
 
 
 def compute_score(expected: list[str], predicted: list[str]) -> float:
-    """Phoneme accuracy score 0-100 based on Levenshtein distance."""
+    """Phoneme accuracy score 0–100 via Levenshtein.editops().
+
+    PER   = len(editops(predicted → expected)) / len(expected)
+    Score = (1 - PER) * 100, clamped to [0, 100].
+    """
     if not expected:
         return 100.0 if not predicted else 0.0
-    n, m = len(expected), len(predicted)
-    dp = list(range(m + 1))
-    for i in range(n):
-        new_dp = [i + 1]
-        for j in range(m):
-            cost = 0 if expected[i] == predicted[j] else 1
-            new_dp.append(min(dp[j] + cost, dp[j + 1] + 1, new_dp[-1] + 1))
-        dp = new_dp
-    per = dp[m] / n
+    ops = Levenshtein.editops(predicted, expected)
+    per = len(ops) / len(expected)
     return round(max(0.0, (1.0 - per) * 100.0), 2)
