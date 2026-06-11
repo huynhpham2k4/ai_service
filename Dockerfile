@@ -21,21 +21,7 @@ COPY . .
 # Warm up / download HuggingFace models and NLTK datasets during build stage.
 # We preload both the default model (from config.py) and the example model (from .env.example)
 # to ensure the container can start instantly offline/without downloading at runtime.
-RUN python -c " \
-import nltk; \
-nltk.download('averaged_perceptron_tagger_eng', quiet=True); \
-nltk.download('cmudict', quiet=True); \
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor; \
-for m in ['vitouphy/wav2vec2-xls-r-300m-phoneme', 'facebook/wav2vec2-base-960h']: \
-    try: \
-        Wav2Vec2Processor.from_pretrained(m, cache_dir='./model_cache'); \
-        Wav2Vec2ForCTC.from_pretrained(m, cache_dir='./model_cache'); \
-        print(f'Successfully pre-loaded model: {m}'); \
-    except Exception as e: \
-        print(f'Could not pre-load model {m}: {e}'); \
-from g2p_en import G2p; \
-g2p = G2p() \
-"
+RUN python -c "import nltk; nltk.download('averaged_perceptron_tagger_eng', quiet=True); nltk.download('cmudict', quiet=True); from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor; [(Wav2Vec2Processor.from_pretrained(m, cache_dir='./model_cache'), Wav2Vec2ForCTC.from_pretrained(m, cache_dir='./model_cache')) for m in ['vitouphy/wav2vec2-xls-r-300m-phoneme', 'facebook/wav2vec2-base-960h']]; from g2p_en import G2p; G2p()"
 
 EXPOSE 8000
 

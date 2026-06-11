@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # Web framework
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
@@ -21,6 +23,7 @@ requests>=2.31.0
 
 # Phoneme (text → ARPAbet)
 g2p_en>=2.1.0
+Levenshtein>=0.25.1
 
 # TTS + common vocabulary filtering
 edge-tts>=6.1.10
