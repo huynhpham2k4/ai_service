@@ -84,9 +84,6 @@ async def recognize(
         
         aligned_expected_str = " ".join(alignment["aligned_expected"])
         aligned_predicted_str = " ".join(alignment["aligned_predicted"])
-        normalized_predicted_str = " ".join(alignment["normalized_predicted"])
-        trimmed_prefix_str = " ".join(alignment["trimmed_prefix"])
-        trimmed_suffix_str = " ".join(alignment["trimmed_suffix"])
         score = alignment["score"]
 
         logger.info("Reference text: %s", text)
@@ -94,9 +91,6 @@ async def recognize(
         logger.info("Predicted phonemes (raw): %s", predicted)
         logger.info("Aligned expected: %s", aligned_expected_str)
         logger.info("Aligned predicted: %s", aligned_predicted_str)
-        logger.info("Normalized predicted: %s", normalized_predicted_str)
-        logger.info("Trimmed prefix: %s", trimmed_prefix_str)
-        logger.info("Trimmed suffix: %s", trimmed_suffix_str)
         logger.info("Distance: %d", alignment["distance"])
         logger.info("Score: %.2f", score)
 
