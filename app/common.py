@@ -198,3 +198,139 @@ def compute_score(expected: list[str], predicted: list[str]) -> float:
     ops = Levenshtein.editops(predicted, expected)
     per = len(ops) / len(expected)
     return round(max(0.0, (1.0 - per) * 100.0), 2)
+
+
+def align_and_trim_noise(expected: list[str], predicted: list[str]) -> dict:
+    """Align expected and predicted IPA phoneme sequences, trim leading and trailing noise,
+    and recalculate score, PER, and edit distance.
+    
+    Inputs expected and predicted are list of IPA tokens.
+    """
+    if not expected:
+        return {
+            "normalized_predicted": predicted,
+            "aligned_expected": [],
+            "aligned_predicted": [],
+            "trimmed_prefix": [],
+            "trimmed_suffix": [],
+            "distance": len(predicted),
+            "score": 0.0 if predicted else 100.0,
+        }
+        
+    if not predicted:
+        return {
+            "normalized_predicted": [],
+            "aligned_expected": expected,
+            "aligned_predicted": ["-"] * len(expected),
+            "trimmed_prefix": [],
+            "trimmed_suffix": [],
+            "distance": len(expected),
+            "score": 0.0,
+        }
+
+    # 1. Perform Levenshtein alignment between expected and predicted
+    opcodes = Levenshtein.opcodes(expected, predicted)
+    aligned_pairs = []
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == 'equal':
+            for k in range(i2 - i1):
+                aligned_pairs.append((expected[i1 + k], predicted[j1 + k], 'match'))
+        elif tag == 'replace':
+            len_e = i2 - i1
+            len_p = j2 - j1
+            min_len = min(len_e, len_p)
+            for k in range(min_len):
+                aligned_pairs.append((expected[i1 + k], predicted[j1 + k], 'replace'))
+            if len_e > len_p:
+                for k in range(min_len, len_e):
+                    aligned_pairs.append((expected[i1 + k], '-', 'delete'))
+            elif len_p > len_e:
+                for k in range(min_len, len_p):
+                    aligned_pairs.append(('-', predicted[j1 + k], 'insert'))
+        elif tag == 'delete':
+            for k in range(i2 - i1):
+                aligned_pairs.append((expected[i1 + k], '-', 'delete'))
+        elif tag == 'insert':
+            for k in range(j2 - j1):
+                aligned_pairs.append(('-', predicted[j1 + k], 'insert'))
+
+    # 2. Find core region containing expected phonemes
+    start_idx = None
+    for idx, (e, p, op) in enumerate(aligned_pairs):
+        if e != '-':
+            start_idx = idx
+            break
+
+    end_idx = None
+    for idx in range(len(aligned_pairs) - 1, -1, -1):
+        e, p, op = aligned_pairs[idx]
+        if e != '-':
+            end_idx = idx
+            break
+
+    if start_idx is None or end_idx is None:
+        # Fallback safety
+        return {
+            "normalized_predicted": predicted,
+            "aligned_expected": expected,
+            "aligned_predicted": ["-"] * len(expected),
+            "trimmed_prefix": [],
+            "trimmed_suffix": [],
+            "distance": len(expected),
+            "score": 0.0,
+        }
+
+    # 3. Extract prefix, suffix, and normalized predicted sequences
+    trimmed_prefix = [p for e, p, op in aligned_pairs[:start_idx] if p != '-']
+    trimmed_suffix = [p for e, p, op in aligned_pairs[end_idx + 1:] if p != '-']
+    normalized_predicted = [p for e, p, op in aligned_pairs[start_idx : end_idx + 1] if p != '-']
+
+    # 4. Generate core alignment between expected and normalized_predicted
+    core_opcodes = Levenshtein.opcodes(expected, normalized_predicted)
+    aligned_expected = []
+    aligned_predicted = []
+    for tag, i1, i2, j1, j2 in core_opcodes:
+        if tag == 'equal':
+            for k in range(i2 - i1):
+                aligned_expected.append(expected[i1 + k])
+                aligned_predicted.append(normalized_predicted[j1 + k])
+        elif tag == 'replace':
+            len_e = i2 - i1
+            len_p = j2 - j1
+            min_len = min(len_e, len_p)
+            for k in range(min_len):
+                aligned_expected.append(expected[i1 + k])
+                aligned_predicted.append(normalized_predicted[j1 + k])
+            if len_e > len_p:
+                for k in range(min_len, len_e):
+                    aligned_expected.append(expected[i1 + k])
+                    aligned_predicted.append('-')
+            elif len_p > len_e:
+                for k in range(min_len, len_p):
+                    aligned_expected.append('-')
+                    aligned_predicted.append(normalized_predicted[j1 + k])
+        elif tag == 'delete':
+            for k in range(i2 - i1):
+                aligned_expected.append(expected[i1 + k])
+                aligned_predicted.append('-')
+        elif tag == 'insert':
+            for k in range(j2 - j1):
+                aligned_expected.append('-')
+                aligned_predicted.append(normalized_predicted[j1 + k])
+
+    # 5. Compute edit distance and score on normalized predicted
+    ops = Levenshtein.editops(normalized_predicted, expected)
+    distance = len(ops)
+    per = distance / len(expected)
+    score = round(max(0.0, (1.0 - per) * 100.0), 2)
+
+    return {
+        "normalized_predicted": normalized_predicted,
+        "aligned_expected": aligned_expected,
+        "aligned_predicted": aligned_predicted,
+        "trimmed_prefix": trimmed_prefix,
+        "trimmed_suffix": trimmed_suffix,
+        "distance": distance,
+        "score": score,
+    }
+

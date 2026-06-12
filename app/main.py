@@ -13,6 +13,7 @@ from app.service import (
     compute_score,
     phonemes_to_ipa,
     phonemes_to_ipa_tokens,
+    align_and_trim_noise,
     _load_model,
 )
 
@@ -76,22 +77,33 @@ async def recognize(
         loop = asyncio.get_event_loop()
         predicted = await loop.run_in_executor(None, predict_phonemes, audio_bytes)
         expected = await loop.run_in_executor(None, expected_phonemes, text)
-        score = compute_score(
-            phonemes_to_ipa_tokens(expected),
-            phonemes_to_ipa_tokens(predicted),
-        )
+        expected_ipa = phonemes_to_ipa_tokens(expected)
+        predicted_ipa = phonemes_to_ipa_tokens(predicted)
+        
+        alignment = align_and_trim_noise(expected_ipa, predicted_ipa)
+        
+        aligned_expected_str = " ".join(alignment["aligned_expected"])
+        aligned_predicted_str = " ".join(alignment["aligned_predicted"])
+        normalized_predicted_str = " ".join(alignment["normalized_predicted"])
+        trimmed_prefix_str = " ".join(alignment["trimmed_prefix"])
+        trimmed_suffix_str = " ".join(alignment["trimmed_suffix"])
+        score = alignment["score"]
 
         logger.info("Reference text: %s", text)
-        logger.info("Expected phonemes: %s", expected)
-        logger.info("Predicted phonemes: %s", predicted)
-        logger.info("Expected phonemes api: %s", phonemes_to_ipa(expected))
-        logger.info("Predicted phonemes api: %s", phonemes_to_ipa(predicted))
+        logger.info("Expected phonemes (raw): %s", expected)
+        logger.info("Predicted phonemes (raw): %s", predicted)
+        logger.info("Aligned expected: %s", aligned_expected_str)
+        logger.info("Aligned predicted: %s", aligned_predicted_str)
+        logger.info("Normalized predicted: %s", normalized_predicted_str)
+        logger.info("Trimmed prefix: %s", trimmed_prefix_str)
+        logger.info("Trimmed suffix: %s", trimmed_suffix_str)
+        logger.info("Distance: %d", alignment["distance"])
         logger.info("Score: %.2f", score)
 
         return {
             "reference_text": text,
-            "expected_phonemes": phonemes_to_ipa(expected),
-            "predicted_phonemes": phonemes_to_ipa(predicted),
+            "expected_phonemes": aligned_expected_str,
+            "predicted_phonemes": aligned_predicted_str,
             "score": score,
         }   
     except Exception as exc:

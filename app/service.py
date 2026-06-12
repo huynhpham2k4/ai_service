@@ -18,6 +18,7 @@ from app.common import (
     save_debug_audio_preview,
     strip_g2p_tokens,
     compute_score,
+    align_and_trim_noise,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,4 +96,5 @@ __all__ = [
     "compute_score",
     "phonemes_to_ipa",
     "phonemes_to_ipa_tokens",
+    "align_and_trim_noise",
 ]
