@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    MODEL_NAME: str = "vitouphy/wav2vec2-xls-r-300m-phoneme"
+    MODEL_NAME: str = "HuynhPhamN/new_model_TTS"
     MODEL_CACHE_DIR: str = "./model_cache"
     SAMPLE_RATE: int = 16000
     MAX_AUDIO_DURATION_SEC: float = 30.0
