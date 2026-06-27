@@ -205,10 +205,10 @@ def iter_cmudict_entries(path: str) -> Iterable[tuple[str, str]]:
 
 def normalize_cmu_word(token: str) -> str | None:
     """
-    CMUdict часто содержит:
-      - варианты произношения WORD(2) -> нужно отбросить целиком (не маппить)
-      - символы / пунктуацию / спецтокены -> убрать
-    Оставляем только A-Z, затем lower().
+    CMUdict often contains:
+      - pronunciation variants WORD(2) -> need to discard entirely (no mapping)
+      - symbols / punctuation / special tokens -> remove
+    Keep only A-Z, then lower().
     """
     t = token.strip()
     if not t:
@@ -222,14 +222,14 @@ def normalize_cmu_word(token: str) -> str | None:
 
 def is_common_english_word(word: str, cfg: Config) -> bool:
     """
-    Частотный фильтр:
-      - если установлен wordfreq -> zipf_frequency(word, 'en') >= cfg.min_zipf
-      - иначе fallback: пропускаем (чтобы скрипт работал), но логируем предупреждение
+    Frequency filter:
+      - if wordfreq is installed -> zipf_frequency(word, 'en') >= cfg.min_zipf
+      - otherwise fallback: let it pass (so script works), but log warning
     """
     if zipf_frequency is None:
         logger.warning(
-            "Библиотека 'wordfreq' не установлена — частотный фильтр отключён. "
-            "Рекомендуется: pip install wordfreq"
+            "Library 'wordfreq' is not installed — frequency filter is disabled. "
+            "Recommended: pip install wordfreq"
         )
         return True
     try:
@@ -241,7 +241,7 @@ def is_common_english_word(word: str, cfg: Config) -> bool:
 def is_good_vocab_candidate(word: str, cfg: Config) -> bool:
     if not (cfg.min_len <= len(word) <= cfg.max_len):
         return False
-    # минимальная защита от “слов” типа 'aaaaa'
+    # minimal protection against "words" like 'aaaaa'
     if len(set(word)) == 1:
         return False
     return is_common_english_word(word, cfg)
@@ -257,7 +257,7 @@ def audio_paths(word: str, cfg: Config) -> tuple[str, str]:
 
 async def save_tts_with_retry(text: str, out_path: str, cfg: Config) -> bool:
     """
-    edge_tts async save с ретраями и экспоненциальным backoff.
+    edge_tts async save with retries and exponential backoff.
     """
     for attempt in range(1, cfg.max_attempts + 1):
         try:
